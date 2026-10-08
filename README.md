@@ -53,3 +53,40 @@ Logged in as a low-privilege user (`Alice`) and exploited the Edit Profile endpo
 - **Full account takeover** — injected a precomputed SHA1 hash directly into another user's `Password` column, then logged in as that user with the corresponding plaintext password
 
 Example payload (account takeover):
+NickName = x’, Password='<sha1_hash>' WHERE Name='Boby' #
+
+
+## Task 4: Remediation — Prepared Statements
+
+Rewrote the vulnerable query in `defense/unsafe.php` using a prepared statement:
+
+```php
+$stmt = $conn->prepare("SELECT id, name, eid, salary, ssn
+                         FROM credential
+                         WHERE name = ? and Password = ?");
+$stmt->bind_param("ss", $input_uname, $hashed_pwd);
+$stmt->execute();
+$result = $stmt->get_result();
+```
+
+By separating the SQL query structure (compiled with `?` placeholders) from user-supplied data (bound afterward via `bind_param`), injected characters (`'`, `#`, `;`) are treated as literal data rather than executable SQL — regardless of content.
+
+**Verification:**
+| Test | Payload | Endpoint | Result |
+|---|---|---|---|
+| Legitimate login | `Alice` / `seedalice` | `/defense/getinfo.php` | ✅ Succeeds — correct profile data returned |
+| Injection bypass | `admin' #` | `/defense/getinfo.php` | ❌ Fails — empty result set, no data leaked |
+
+This confirms the fix neutralizes the exact payload that succeeded against the unpatched endpoint in Task 2.
+
+## Key Takeaway
+
+SQL injection's root cause is the failure to separate code from data when constructing queries. Input sanitization and blocklisting are brittle; prepared statements solve the problem structurally by guaranteeing user input is never re-parsed as SQL syntax.
+
+## Tech Stack
+
+`PHP` · `MySQL` · `Docker` / `Docker Compose` · `cURL` · `Bash`
+
+## Disclaimer
+
+This project was completed in an isolated, intentionally vulnerable lab environment for educational purposes as part of a university coursework assignment. Techniques demonstrated here should never be used against systems without explicit authorization.
